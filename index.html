@@ -95,6 +95,28 @@ h2{font-size:clamp(30px,4vw,44px);letter-spacing:-1px;line-height:1.1;margin:0 0
 footer{border-top:1px solid var(--line);padding:30px 0 40px;font-size:15px;color:var(--muted);display:flex;justify-content:space-between;flex-wrap:wrap;gap:12px}
 footer a{color:var(--muted);margin-left:18px}
 
+
+.dash{display:grid;grid-template-columns:1fr 1fr;gap:56px;align-items:center}
+.soon{display:inline-block;background:var(--surface);color:var(--saffron);font-weight:700;font-size:15px;padding:6px 12px;border-radius:999px;margin-bottom:16px}
+.dash-list{list-style:none;padding:0;margin:0 0 28px}
+.dash-list li{padding:12px 0;border-bottom:1px solid var(--line)}
+.dash-list strong{display:block}
+.dash-list span{color:var(--muted);font-size:16px}
+.mock{background:var(--surface);border-radius:18px;padding:26px}
+.mock h3{margin:0 0 4px;font-size:18px}
+.mock .sub{color:var(--muted);font-size:14px;margin:0 0 18px}
+.kpis{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:20px}
+.kpi{background:var(--bg);border-radius:12px;padding:14px}
+.kpi b{display:block;font-size:22px;letter-spacing:-.5px}
+.kpi small{color:var(--muted);font-size:13px}
+.dish{display:grid;grid-template-columns:1fr auto;gap:6px 12px;align-items:center;font-size:15px;margin-bottom:10px}
+.bar{grid-column:1/-1;height:8px;border-radius:4px;background:var(--line);overflow:hidden}
+.bar i{display:block;height:100%;background:var(--leaf)}
+.bar i.low{background:var(--saffron)}
+@media (max-width:860px){.dash{grid-template-columns:1fr}}
+
+.video-wrap{border-radius:18px;overflow:hidden;background:#14151A;box-shadow:0 18px 40px rgba(23,23,28,.18)}
+.video-wrap video{display:block;width:100%;height:auto;aspect-ratio:16/9}
 @media (max-width:860px){
   .hero,.split,.contact{grid-template-columns:1fr}
   .hero{padding-top:20px;gap:44px}
@@ -114,6 +136,7 @@ footer a{color:var(--muted);margin-left:18px}
     <nav class="nav" aria-label="Main">
       <a href="#how">How it works</a>
       <a href="#features">Features</a>
+      <a href="#dashboard">Dashboard</a>
       <a class="btn" href="#contact">Book a demo</a>
     </nav>
   </header>
@@ -125,7 +148,7 @@ footer a{color:var(--muted);margin-left:18px}
         <p class="lead">RestoServe AI answers every call at your restaurant, takes pickup orders and sends them straight to your kitchen, even during the Friday rush. Works with Square, with more POS systems coming soon.</p>
         <div class="ctas">
           <a class="btn" href="#contact">Book a demo</a>
-          <a class="btn ghost" href="#how">See how it works</a>
+          <a class="btn ghost" href="#video">Watch the 2-minute demo</a>
         </div>
         <p class="built">Built by Ibrahim Khan, owner of Royal Hyderabad in Albuquerque, and used there every day.</p>
       </div>
@@ -145,6 +168,17 @@ footer a{color:var(--muted);margin-left:18px}
         </div>
       </div>
     </div>
+
+    <section id="video">
+      <h2>See it in action</h2>
+      <p class="intro">A two-minute look at RestoServe AI, including a real call to our AI host at Royal Hyderabad.</p>
+      <div class="video-wrap">
+        <video controls playsinline preload="metadata" poster="video-poster.jpg">
+          <source src="restoserve-explainer.mp4" type="video/mp4">
+          Your browser can’t play this video. <a href="restoserve-explainer.mp4">Download it</a>.
+        </video>
+      </div>
+    </section>
 
     <section id="how">
       <h2>How it works</h2>
@@ -172,8 +206,37 @@ footer a{color:var(--muted);margin-left:18px}
           <li><strong>Knows your menu</strong><span>Describes dishes, handles spice levels and family packs, and knows your weekly specials.</span></li>
           <li><strong>Catering leads captured</strong><span>Collects the event date, guest count and budget, then emails your team.</span></li>
           <li><strong>Hands off to staff</strong><span>Transfers complaints and special requests to a person.</span></li>
-          <li><strong>Profit dashboard (coming soon)</strong><span>See calls answered, phone sales and which dishes make money.</span></li>
+          <li><strong>Profit dashboard (coming soon)</strong><span>Profit per dish, expenses and your whole business in one view. <a href="#dashboard">Learn more</a></span></li>
         </ul>
+      </div>
+    </section>
+
+    <section id="dashboard">
+      <div class="dash">
+        <div>
+          <span class="soon">Coming soon</span>
+          <h2>Know exactly what makes you money</h2>
+          <p class="intro">The RestoServe profit dashboard brings your calls, sales, expenses and food costs into one simple view.</p>
+          <ul class="dash-list">
+            <li><strong>Profit on every dish</strong><span>See the real plate cost and margin of each item on your menu.</span></li>
+            <li><strong>Expenses in one place</strong><span>Track ingredient costs and spot price increases before they eat your margins.</span></li>
+            <li><strong>Your whole business at a glance</strong><span>Sales, phone orders, calls answered and money saved, day by day.</span></li>
+            <li><strong>A weekly report</strong><span>What made money, what didn’t, and what to fix next week.</span></li>
+          </ul>
+          <a class="btn" href="mailto:khan@restoserve.ai?subject=Dashboard%20early%20access">Get early access</a>
+        </div>
+        <div class="mock" aria-label="Preview of the upcoming profit dashboard with sample numbers">
+          <h3>This week</h3>
+          <p class="sub">Sample preview</p>
+          <div class="kpis">
+            <div class="kpi"><b>$6,420</b><small>Sales</small></div>
+            <div class="kpi"><b>31%</b><small>Food cost</small></div>
+            <div class="kpi"><b>142</b><small>Calls answered</small></div>
+          </div>
+          <div class="dish"><span>Goat Fry Biryani</span><span>68% margin</span><div class="bar"><i style="width:68%"></i></div></div>
+          <div class="dish"><span>Chicken Dum Biryani</span><span>64% margin</span><div class="bar"><i style="width:64%"></i></div></div>
+          <div class="dish"><span>Tandoori Pomfret</span><span>22% margin</span><div class="bar"><i class="low" style="width:22%"></i></div></div>
+        </div>
       </div>
     </section>
 
