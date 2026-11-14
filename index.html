@@ -989,7 +989,8 @@
   Object.values(modals).forEach(m => m.addEventListener('click', e => { if (e.target === m || e.target.hasAttribute('data-close')) closeAll(); }));
   document.addEventListener('keydown', e => { if (e.key === 'Escape') closeAll(); });
 
-  // Forms: send to send.php on your hosting; if that isn't available, ask the visitor to email instead
+  // Forms: emailed by your RestoServe server on Render. Put your server's address here (Render > restoserve-server > the URL at the top).
+  const FORM_URL = 'https://restoserve-server.onrender.com/website-form';
   document.querySelectorAll('form[data-form]').forEach(form => {
     const box = form.parentElement, err = box.querySelector('.form-error'), sent = box.querySelector('.sent');
     form.addEventListener('submit', async e => {
@@ -1000,9 +1001,9 @@
       if (missing.length) { err.textContent = 'Please fill in: ' + missing.map(el => (form.querySelector('label[for="' + el.id + '"]') || {}).textContent || 'the agreement checkbox').join(', ') + '.'; err.style.display = 'block'; missing[0].focus(); return; }
       if (email && !/^\S+@\S+\.\S+$/.test(email.value)) { err.textContent = 'Please enter a valid email address.'; err.style.display = 'block'; email.focus(); return; }
       const btn = form.querySelector('button[type=submit]'); const label = btn.textContent; btn.disabled = true; btn.textContent = 'Sending…';
-      const data = new FormData(form); data.append('form_type', form.dataset.form);
+      const data = Object.fromEntries(new FormData(form)); data.form_type = form.dataset.form;
       try {
-        const r = await fetch('send.php', { method: 'POST', body: data });
+        const r = await fetch(FORM_URL, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(data) });
         const j = await r.json().catch(() => ({}));
         if (!r.ok || !j.ok) throw new Error('not sent');
         form.style.display = 'none'; sent.style.display = 'block';
