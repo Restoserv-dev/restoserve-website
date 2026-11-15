@@ -201,10 +201,11 @@
   .lang-cloud span.more{border-style:dashed;color:#A7B1BF}
 
   /* Pricing */
-  .plans{display:grid;grid-template-columns:repeat(3,1fr);gap:24px;align-items:stretch}
-  .plan{background:#fff;border:1px solid var(--line);border-radius:var(--r-card);padding:36px 32px;display:flex;flex-direction:column;gap:8px}
+  .plans{display:grid;grid-template-columns:repeat(4,1fr);gap:20px;align-items:stretch}
+  @media (max-width:1100px){.plans{grid-template-columns:repeat(2,1fr)}.plan.hot{transform:none}}
+  .plan{background:#fff;border:1px solid var(--line);border-radius:var(--r-card);padding:32px 24px;display:flex;flex-direction:column;gap:8px}
   .plan .tier{font-weight:700;font-size:1rem;color:var(--accent)}
-  .plan .price{font-family:var(--display);font-size:3.6rem;color:var(--ink);line-height:1.05}
+  .plan .price{font-family:var(--display);font-size:3rem;color:var(--ink);line-height:1.05}
   .plan .price small{font:500 1rem var(--body);color:var(--text)}
   .plan .mins{font-weight:700;color:var(--ink)}
   .plan .calls{font-size:.95rem;margin-top:-6px}
@@ -592,6 +593,15 @@
     <p class="lead" style="margin-bottom:60px">Per location, per month, on a 12-month plan. Every plan starts with a 14-day free trial, no card needed.</p>
     <div class="plans">
       <div class="plan">
+        <span class="tier">Lite</span>
+        <span class="price">$199<small>/mo</small></span>
+        <span class="mins">250 minutes a month</span>
+        <span class="calls">about 155 calls</span>
+        <span class="yearly">Pay yearly: $1,990 (save $398)</span>
+        <ul><li>Answers every call, 24/7</li><li>Orders emailed to you</li><li>Catering and complaints to your manager</li></ul>
+        <a class="btn outline" href="#start">Start free trial</a>
+      </div>
+      <div class="plan">
         <span class="tier">Starter</span>
         <span class="price">$299<small>/mo</small></span>
         <span class="mins">500 minutes a month</span>
@@ -620,7 +630,6 @@
       </div>
     </div>
     <div class="fine">
-      <div><b>Lite plan</b>$199/mo for 250 minutes (about 155 calls). Every call answered, orders by email.</div>
       <div><b>Flash Deals</b>Text a deal to your regular customers to fill slow hours. Included in Pro, $49/mo add-on for Starter and Standard.</div>
       <div><b>One-time setup</b>$499, or $749 for Pro.</div>
       <div><b>Extra minutes</b>$0.45 a minute on every plan. Calls are never cut off, and we alert you at 80% and 100%.</div>
