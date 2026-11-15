@@ -161,7 +161,8 @@
   .msel{width:auto!important;min-width:150px;padding:8px 12px!important;border-radius:999px!important}
   .hdr{display:flex;align-items:center;gap:10px;font-size:.9rem}
   .modal-back{position:fixed;inset:0;background:rgba(30,42,56,.55);display:flex;align-items:center;justify-content:center;padding:16px;z-index:20}
-  .pwcard{width:min(420px,100%)}
+  .pwcard{width:min(420px,100%);max-height:calc(100vh - 32px);overflow:auto}
+  .tin{width:100%;border:1.5px solid #D5D9E0;border-radius:10px;padding:12px 14px;color:var(--ink);background:#fff}
   .pwcard h2{font-family:var(--display);font-weight:400;font-size:1.6rem}
   .pwcard input,.login input[type=password]{width:100%;border:1.5px solid #D5D9E0;border-radius:10px;padding:12px 14px;color:var(--ink);background:#fff}
   .stack{display:flex;flex-direction:column;gap:24px;min-width:0}
@@ -525,9 +526,10 @@ async function partnerView(){
   const v = document.getElementById('view');
   v.innerHTML = `<div class="bar"><div><h1>${me.admin ? 'Leads and partners' : 'Partner portal'}</h1>
     <p class="sub">${me.admin ? 'Every free-trial request from the website. Set the status as each one moves along.' : 'Restaurants you introduced and where each one stands. You earn $500 when one becomes a paying customer.'}</p></div>
-    <a class="btn line small" href="https://restoserve.ai/#start" target="_blank" rel="noopener">Add a restaurant</a></div>
+    ${me.admin ? '<a class="btn line small" href="https://restoserve.ai/#start" target="_blank" rel="noopener">Free trial form</a>' : '<button class="btn small" id="addLead" type="button">Add a restaurant</button>'}</div>
     <div class="tiles" id="ptiles">${['Restaurants','Paying','Earned','Waiting to be paid'].map(k => `<div class="tile"><div class="k">${k}</div><div class="v"><span class="skel"></span></div></div>`).join('')}</div>
     <section class="panel"><div class="hd"><h2>Restaurants</h2><span>${me.admin ? '' : 'Put your name in "Referred by" when they sign up'}</span></div><div id="leads"><p class="loading">Loading…</p></div></section>`;
+  const al = document.getElementById('addLead'); if (al) al.addEventListener('click', leadForm);
   try {
     const d = await api('/dash/leads');
     const paying = d.leads.filter(l => l.status === 'Paying' || l.status === 'Paid out').length;
@@ -548,6 +550,42 @@ async function partnerView(){
       catch(e) { s.disabled = false; }
     }));
   } catch(e) { document.getElementById('leads').innerHTML = `<p class="empty">${esc(e.message)}</p>`; }
+}
+
+
+/* ---------- Partner: add a restaurant ---------- */
+function leadForm(){
+  const box = document.createElement('div');
+  box.className = 'modal-back';
+  box.innerHTML = `<div class="card pwcard" role="dialog" aria-modal="true" aria-labelledby="lft" style="width:min(520px,100%)">
+    <h2 id="lft">Add a restaurant</h2>
+    <p class="note" style="margin:6px 0 4px">It's credited to you automatically. We'll call the owner within one business day.</p>
+    <form id="leadF" novalidate>
+      <label for="lf_r">Restaurant name</label><input id="lf_r" type="text" class="tin">
+      <label for="lf_c">City</label><input id="lf_c" type="text" class="tin">
+      <label for="lf_o">Owner's name</label><input id="lf_o" type="text" class="tin">
+      <label for="lf_p">Owner's phone</label><input id="lf_p" type="tel" class="tin">
+      <label for="lf_e">Owner's email (optional)</label><input id="lf_e" type="email" class="tin">
+      <label for="lf_pl">Plan they're interested in</label><select id="lf_pl"><option>Not sure yet</option><option>Lite $199</option><option>Starter $299</option><option>Standard $449</option><option>Pro $649</option></select>
+      <label for="lf_n">Notes (optional)</label><textarea id="lf_n" rows="3" placeholder="Best time to call, their POS, anything useful"></textarea>
+      <div id="lfMsg"></div>
+      <div class="facts"><button class="btn small" type="submit">Add restaurant</button><button class="btn line small" type="button" id="lfCancel">Cancel</button></div>
+    </form></div>`;
+  document.body.appendChild(box);
+  const close = () => box.remove(), q = id => box.querySelector(id);
+  q('#lfCancel').addEventListener('click', close);
+  box.addEventListener('click', e => { if (e.target === box) close(); });
+  q('#lf_r').focus();
+  q('#leadF').addEventListener('submit', async e => {
+    e.preventDefault(); const btn = e.target.querySelector('[type=submit]'), m = q('#lfMsg');
+    if (!q('#lf_r').value.trim() || q('#lf_p').value.replace(/\D/g,'').length < 10) { m.innerHTML = '<div class="msg err">Enter the restaurant name and the owner’s phone number.</div>'; return; }
+    btn.disabled = true;
+    try {
+      await api('/dash/partner/lead', { method:'POST', body: JSON.stringify({ restaurant: q('#lf_r').value, city: q('#lf_c').value, owner: q('#lf_o').value,
+        phone: q('#lf_p').value, email: q('#lf_e').value, plan: q('#lf_pl').value, notes: q('#lf_n').value }) });
+      m.innerHTML = '<div class="msg ok">Added. It’s now in your list as New.</div>'; setTimeout(() => { close(); partnerView(); }, 1200);
+    } catch(x) { btn.disabled = false; m.innerHTML = `<div class="msg err">${esc(x.message)}</div>`; }
+  });
 }
 
 /* ---------- Admin overview ---------- */
