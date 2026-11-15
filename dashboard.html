@@ -377,17 +377,15 @@ async function loadCalls(q, loc){
     box.querySelectorAll('.call').forEach(b => b.addEventListener('click', () => {
       const c = calls[b.dataset.i], det = b.nextElementSibling, open = det.hidden;
       det.hidden = !open; b.setAttribute('aria-expanded', open);
-      if (open && !det.innerHTML) det.innerHTML =
-        (has(loc,'recordings') ? (c.recording ? `<button class="btn line small play" type="button">▶ Play recording</button>` : '') : lockNote('Call recordings', 'Standard')) +
-        (has(loc,'transcripts') ? `<div class="transcript">${esc(c.transcript || 'No transcript for this call.')}</div>` : lockNote('Full transcripts', 'Starter'));
-      const pb = det.querySelector('.play');
-      if (pb) pb.addEventListener('click', async () => {
-        pb.disabled = true; pb.textContent = 'Loading…';
-        try {
-          const r = await api(`/dash/recording?loc=${encodeURIComponent(loc.key)}&call_id=${encodeURIComponent(c.id)}`);
-          const au = document.createElement('audio'); au.controls = true; au.src = r.url; pb.replaceWith(au); au.play().catch(() => {});
-        } catch(e) { pb.disabled = false; pb.textContent = '▶ Play recording'; }
-      });
+      if (open && !det.innerHTML) {
+        const locks = (has(loc,'recordings') ? '' : lockNote('Call recordings', 'Standard')) + (has(loc,'transcripts') ? '' : lockNote('Full transcripts', 'Starter'));
+        if (!has(loc,'recordings') && !has(loc,'transcripts')) { det.innerHTML = locks; return; }
+        det.innerHTML = '<p class="loading" style="padding:4px 0">Loading call…</p>';
+        api(`/dash/call?loc=${encodeURIComponent(loc.key)}&call_id=${encodeURIComponent(c.id)}`).then(r => {
+          det.innerHTML = (r.recording ? `<audio controls preload="none" src="${esc(r.recording)}"></audio>` : (has(loc,'recordings') ? '<p class="note" style="margin:0 0 8px">No recording for this call.</p>' : '')) +
+            (has(loc,'transcripts') ? `<div class="transcript">${esc(r.transcript || 'No transcript for this call.')}</div>` : '') + locks;
+        }).catch(e => { det.innerHTML = `<p class="note">${esc(e.message)}</p>`; });
+      }
     }));
   } catch(e) { box.innerHTML = `<p class="empty">${esc(e.message)}</p>`; }
 }
@@ -611,7 +609,10 @@ async function customersView(msg){
     btn.disabled = true; const t = btn.textContent; btn.textContent = 'Importing…';
     try { const r = await api('/dash/admin/sync', { method:'POST', body: JSON.stringify(loc ? {loc} : {}) });
       const n = Object.values(r.imported).reduce((a,b) => a+b, 0);
-      v.querySelector('#cmsg').innerHTML = `<div class="msg ok" style="margin:0 0 16px">Imported ${num(n)} calls from the last 35 days.</div>`;
+      const errs = Object.entries(r.errors || {}).map(([k,m]) => `${esc(names[k] || k)}: ${esc(m)}`);
+      const nc = (r.not_connected || []).map(k => esc(names[k] || k));
+      v.querySelector('#cmsg').innerHTML = `<div class="msg ${errs.length ? 'err' : 'ok'}" style="margin:0 0 16px">Imported ${num(n)} calls from the last 35 days.` +
+        (nc.length ? ` No Retell agent ID yet: ${nc.join(', ')}.` : '') + (errs.length ? `<br>Problem: ${errs.join('<br>')}` : '') + '</div>';
     } catch(e) { v.querySelector('#cmsg').innerHTML = `<div class="msg err" style="margin:0 0 16px">${esc(e.message)}</div>`; }
     btn.disabled = false; btn.textContent = t;
   };
