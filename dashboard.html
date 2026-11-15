@@ -160,6 +160,10 @@
   @media (max-width:800px){.fgrid{grid-template-columns:1fr}}
   .msel{width:auto!important;min-width:150px;padding:8px 12px!important;border-radius:999px!important}
   .hdr{display:flex;align-items:center;gap:10px;font-size:.9rem}
+  .modal-back{position:fixed;inset:0;background:rgba(30,42,56,.55);display:flex;align-items:center;justify-content:center;padding:16px;z-index:20}
+  .pwcard{width:min(420px,100%)}
+  .pwcard h2{font-family:var(--display);font-weight:400;font-size:1.6rem}
+  .pwcard input,.login input[type=password]{width:100%;border:1.5px solid #D5D9E0;border-radius:10px;padding:12px 14px;color:var(--ink);background:#fff}
   .stack{display:flex;flex-direction:column;gap:24px;min-width:0}
   .grid2>*{min-width:0}
   td select{padding:6px 10px;width:auto}
@@ -196,7 +200,7 @@
       <svg width="34" height="34" viewBox="0 0 40 40" aria-hidden="true"><circle cx="20" cy="20" r="20" fill="#C2490F"/><g stroke="#fff" stroke-width="2.6" stroke-linecap="round"><line x1="12" y1="17" x2="12" y2="23"/><line x1="16.5" y1="13" x2="16.5" y2="27"/><line x1="21" y1="10" x2="21" y2="30"/><line x1="25.5" y1="14" x2="25.5" y2="26"/><line x1="30" y1="17.5" x2="30" y2="22.5"/></g></svg>
       RestoServe AI
     </a>
-    <div class="who" id="who" hidden><span>Signed in as <b id="whoName"></b></span><button class="btn ghost small" id="logout" type="button">Log out</button></div>
+    <div class="who" id="who" hidden><span>Signed in as <b id="whoName"></b></span><button class="btn ghost small" id="pwSet" type="button">Password</button><button class="btn ghost small" id="logout" type="button">Log out</button></div>
   </div>
 </header>
 
@@ -259,39 +263,88 @@ function showLogin(notice, role){
   app.innerHTML = `
   <div class="center"><div class="card login">
     <h1>Log in</h1>
-    <p>Enter the email on your RestoServe account. We'll email you a secure link. No password needed.</p>
+    <p>Use your password, or get a secure login link by email.</p>
     <div class="seg" role="group" aria-label="Account type">
       <button type="button" data-role="owner" aria-pressed="${role==='owner'}">Restaurant owner</button>
       <button type="button" data-role="partner" aria-pressed="${role==='partner'}">Sales partner</button>
     </div>
     <form id="loginForm" novalidate>
       <label for="em">Email</label>
-      <input id="em" type="email" autocomplete="email" required>
-      <button class="btn" type="submit">Email me my link</button>
+      <input id="em" type="email" autocomplete="username" required>
+      <label for="pw">Password</label>
+      <input id="pw" type="password" autocomplete="current-password" placeholder="Leave empty to get an email link">
+      <button class="btn" type="submit" id="pwBtn">Log in</button>
+      <button class="btn line" type="button" id="linkBtn" style="width:100%;margin-top:10px">Email me a login link</button>
     </form>
     <div id="loginMsg">${notice ? `<div class="msg err">${esc(notice)}</div>` : ''}</div>
+    <p class="note">No password yet, or forgot it? Use the email link, then set a password from your dashboard.</p>
     <p class="note">Not a customer yet? <a href="https://restoserve.ai/#start">Start a free trial</a></p>
   </div></div>`;
   app.querySelectorAll('[data-role]').forEach(b => b.addEventListener('click', () => {
     role = b.dataset.role; app.querySelectorAll('[data-role]').forEach(x => x.setAttribute('aria-pressed', x === b));
   }));
-  app.querySelector('#loginForm').addEventListener('submit', async e => {
-    e.preventDefault();
-    const em = app.querySelector('#em'), msg = app.querySelector('#loginMsg'), btn = e.target.querySelector('button');
-    if (!/^\S+@\S+\.\S+$/.test(em.value.trim())) { msg.innerHTML = '<div class="msg err">Please enter a valid email address.</div>'; em.focus(); return; }
-    btn.disabled = true; btn.textContent = 'Sending…';
+  const em = app.querySelector('#em'), pw = app.querySelector('#pw'), msg = app.querySelector('#loginMsg');
+  const validEmail = () => { if (/^\S+@\S+\.\S+$/.test(em.value.trim())) return true; msg.innerHTML = '<div class="msg err">Please enter a valid email address.</div>'; em.focus(); return false; };
+  async function sendLink(){
+    if (!validEmail()) return;
+    const btn = app.querySelector('#linkBtn'); btn.disabled = true; btn.textContent = 'Sending…';
     try {
       const r = await fetch(API + '/website-form', { method:'POST', headers:{'Content-Type':'application/json'},
         body: JSON.stringify({ form_type: role === 'partner' ? 'Partner portal login request' : 'Owner dashboard login request', Email: em.value.trim() }) });
       const j = await r.json().catch(() => ({}));
       if (!r.ok || !j.ok) throw 0;
-      e.target.hidden = true;
+      app.querySelector('#loginForm').hidden = true;
       msg.innerHTML = '<div class="msg ok"><b>Check your email.</b> If this email is on a RestoServe account, your link is on its way. It works once and expires in 20 minutes.</div>';
     } catch(x) {
       msg.innerHTML = '<div class="msg err">We couldn’t send the link right now. Please try again, or email hello@restoserve.ai.</div>';
-    } finally { btn.disabled = false; btn.textContent = 'Email me my link'; }
+    } finally { btn.disabled = false; btn.textContent = 'Email me a login link'; }
+  }
+  app.querySelector('#linkBtn').addEventListener('click', sendLink);
+  app.querySelector('#loginForm').addEventListener('submit', async e => {
+    e.preventDefault(); msg.innerHTML = '';
+    if (!pw.value) return sendLink();
+    if (!validEmail()) return;
+    const btn = app.querySelector('#pwBtn'); btn.disabled = true; btn.textContent = 'Logging in…';
+    try {
+      const r = await fetch(API + '/auth/password-login', { method:'POST', headers:{'Content-Type':'application/json'},
+        body: JSON.stringify({ email: em.value.trim(), password: pw.value }) });
+      const j = await r.json().catch(() => ({}));
+      if (!r.ok) throw new Error(j.detail || 'Could not log in.');
+      session = j.session; store.set('rs_session', session); start();
+    } catch(x) { msg.innerHTML = `<div class="msg err">${esc(x.message === 'Failed to fetch' ? 'Can’t reach the server right now. Try again in a minute.' : x.message)}</div>`; pw.select(); }
+    finally { btn.disabled = false; btn.textContent = 'Log in'; }
   });
 }
+
+/* ---------- Password ---------- */
+function passwordPanel(){
+  const box = document.createElement('div');
+  box.className = 'modal-back';
+  box.innerHTML = `<div class="card pwcard" role="dialog" aria-modal="true" aria-labelledby="pwt">
+    <h2 id="pwt">${me.has_password ? 'Change your password' : 'Set a password'}</h2>
+    <p class="note" style="margin:6px 0 4px">Then you can log in with your email and password. The email link keeps working too.</p>
+    <form id="pwForm" novalidate>
+      <label for="np1">New password</label><input id="np1" type="password" autocomplete="new-password" minlength="8">
+      <label for="np2">Type it again</label><input id="np2" type="password" autocomplete="new-password">
+      <div id="pwMsg"></div>
+      <div class="facts"><button class="btn small" type="submit">Save password</button><button class="btn line small" type="button" id="pwCancel">Cancel</button></div>
+    </form></div>`;
+  document.body.appendChild(box);
+  const close = () => box.remove();
+  box.querySelector('#pwCancel').addEventListener('click', close);
+  box.addEventListener('click', e => { if (e.target === box) close(); });
+  box.querySelector('#np1').focus();
+  box.querySelector('#pwForm').addEventListener('submit', async e => {
+    e.preventDefault();
+    const a = box.querySelector('#np1').value, b = box.querySelector('#np2').value, m = box.querySelector('#pwMsg');
+    if (a.length < 8) { m.innerHTML = '<div class="msg err">Use at least 8 characters.</div>'; return; }
+    if (a !== b) { m.innerHTML = '<div class="msg err">The two passwords don’t match.</div>'; return; }
+    try { await api('/auth/set-password', { method:'POST', body: JSON.stringify({ password: a }) });
+      me.has_password = true; m.innerHTML = '<div class="msg ok">Password saved. Next time you can log in with it.</div>'; setTimeout(close, 1500);
+    } catch(x) { m.innerHTML = `<div class="msg err">${esc(x.message)}</div>`; }
+  });
+}
+document.getElementById('pwSet').addEventListener('click', () => passwordPanel());
 
 /* ---------- Start ---------- */
 async function start(){
