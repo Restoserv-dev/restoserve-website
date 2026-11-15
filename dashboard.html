@@ -634,12 +634,16 @@ async function customersView(msg){
     <div id="cmsg">${msg ? `<div class="msg ok" style="margin:0 0 16px">${esc(msg)}</div>` : ''}</div>
     <section class="panel" style="margin-bottom:24px"><div class="hd"><h2>Restaurants</h2><button class="btn small" id="addRest" type="button">Add restaurant</button></div><div id="restForm"></div><div id="restList"><p class="loading">Loading…</p></div></section>
     <section class="panel"><div class="hd"><h2>Logins</h2><button class="btn small" id="addAcc" type="button">Add login</button></div><div id="accForm"></div><div id="accList"><p class="loading">Loading…</p></div></section>`;
-  let d;
-  try { d = await api('/dash/admin/customers'); } catch(e) { v.querySelector('#restList').innerHTML = `<p class="empty">${esc(e.message)}</p>`; return; }
+  let d, sq = {};
+  try { [d, sq] = await Promise.all([api('/dash/admin/customers'), api('/dash/admin/square').catch(() => ({}))]); } catch(e) { v.querySelector('#restList').innerHTML = `<p class="empty">${esc(e.message)}</p>`; return; }
   const names = Object.fromEntries(d.restaurants.map(r => [r.key, r.name]));
-  v.querySelector('#restList').innerHTML = d.restaurants.length ? `<div class="scroll"><table><thead><tr><th>Restaurant</th><th>Plan</th><th>Order emails go to</th><th>Retell agent</th><th>Phone setup</th><th></th></tr></thead><tbody>` +
+  const sqCell = r => { const x = sq[r.key]; if (!x) return '<small>–</small>';
+    if (x.connected) return `<span class="pill g">Connected</span><br><small>${esc(x.business)}</small>`;
+    return `<span class="pill n">Your Square</span><br><button class="btn line small" type="button" data-sqlink="${esc(r.key)}" style="margin-top:6px" ${x.ready ? '' : 'disabled title="Add SQUARE_APP_ID and SQUARE_APP_SECRET in Render first"'}>Copy connect link</button>`; };
+  v.querySelector('#restList').innerHTML = d.restaurants.length ? `<div class="scroll"><table><thead><tr><th>Restaurant</th><th>Plan</th><th>Square</th><th>Order emails go to</th><th>Retell agent</th><th>Phone setup</th><th></th></tr></thead><tbody>` +
     d.restaurants.map((r,i) => `<tr><td><b>${esc(r.name)}</b>${r.internal ? '<span class="tag">Test</span>' : ''}<br><small>${esc(r.key)}</small></td>
       <td>${esc(r.plan)}${r.flash_deals ? '<span class="tag">+ Deals</span>' : ''}${r.minutes ? `<br><small>${num(r.minutes)} min</small>` : ''}</td>
+      <td>${sqCell(r)}</td>
       <td>${r.alert_emails ? esc(r.alert_emails) : '<small>You (not set yet)</small>'}</td>
       <td>${r.agent_id ? `<span class="code">${esc(r.agent_id)}</span>` : '<span class="pill a">Not connected</span>'}</td>
       <td>${r.phone_ready ? `<small>Function URLs end with</small> <span class="code">?loc=${esc(r.key)}</span>` : '<span class="pill a">Needs Square location ID</span>'}</td>
@@ -665,7 +669,7 @@ async function customersView(msg){
         <div><label for="rf_key">Short name</label><input type="text" id="rf_key" value="${esc(r.key||'')}" ${isNew?'':'readonly'} placeholder="taj-palace"><small>Used in the Retell links. Can't change later.</small></div>
         <div><label for="rf_plan">Plan</label><select id="rf_plan">${d.plans.map(p => `<option ${p===r.plan?'selected':''}>${p}</option>`).join('')}</select></div>
         <div><label for="rf_agent">Retell agent ID</label><input type="text" id="rf_agent" value="${esc(r.agent_id||'')}" placeholder="agent_..."><small>Calls, minutes and recordings come from this agent.</small></div>
-        <div><label for="rf_sq">Square location ID</label><input type="text" id="rf_sq" value="${esc(r.square_location_id||'')}" placeholder="L08M50SDF51R6"><small>Where phone orders go.</small></div>
+        <div><label for="rf_sq">Square location</label>${(sq[r.key] && sq[r.key].locations.length) ? `<select id="rf_sq">${sq[r.key].locations.map(l => `<option value="${esc(l.id)}" ${l.id===r.square_location_id?'selected':''}>${esc(l.name)}${l.address ? ' · ' + esc(l.address) : ''}</option>`).join('')}</select><small>From their connected Square.</small>` : `<input type="text" id="rf_sq" value="${esc(r.square_location_id||'')}" placeholder="L08M50SDF51R6"><small>Where phone orders go. Connect their Square to pick from a list.</small>`}</div>
         <div><label for="rf_tz">Time zone</label><select id="rf_tz">${TZS.map(([k,t]) => `<option value="${k}" ${k===(r.tz||'America/Denver')?'selected':''}>${t}</option>`).join('')}</select></div>
         <div><label for="rf_min">Custom minutes (optional)</label><input type="number" id="rf_min" min="0" value="${esc(r.minutes||'')}" placeholder="Plan default"></div>
         <div class="wide"><label for="rf_em">Order and alert emails</label><input type="text" id="rf_em" value="${esc(r.alert_emails||'')}" placeholder="owner@gmail.com, manager@gmail.com"><small>Phone orders, catering, complaints and payment alerts for this restaurant go here (up to 5, separated by commas). Leave empty and they come to you.</small></div>
@@ -715,6 +719,11 @@ async function customersView(msg){
   }
 
   v.querySelector('#addRest').addEventListener('click', () => restForm());
+  v.querySelectorAll('[data-sqlink]').forEach(b => b.addEventListener('click', async () => {
+    const link = sq[b.dataset.sqlink].link, msg = v.querySelector('#cmsg');
+    try { await navigator.clipboard.writeText(link); b.textContent = 'Link copied'; } catch(e) { b.textContent = 'Link shown above'; }
+    msg.innerHTML = `<div class="msg ok" style="margin:0 0 16px">Send this link to the owner of ${esc(names[b.dataset.sqlink])}. They log in to Square and click Allow. It works for them only, so don't post it publicly.<br><span class="code">${esc(link)}</span></div>`;
+  }));
   v.querySelector('#addAcc').addEventListener('click', () => accForm());
   v.querySelectorAll('[data-edit-rest]').forEach(b => b.addEventListener('click', () => restForm(d.restaurants[b.dataset.editRest])));
   v.querySelectorAll('[data-edit-acc]').forEach(b => b.addEventListener('click', () => accForm(d.accounts[b.dataset.editAcc])));
