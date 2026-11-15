@@ -158,6 +158,8 @@
   .code{font-family:ui-monospace,Menlo,monospace;font-size:.82rem;background:var(--sage);border-radius:6px;padding:2px 6px;word-break:break-all}
   .rowacts{display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end}
   @media (max-width:800px){.fgrid{grid-template-columns:1fr}}
+  .msel{width:auto!important;min-width:150px;padding:8px 12px!important;border-radius:999px!important}
+  .hdr{display:flex;align-items:center;gap:10px;font-size:.9rem}
   .stack{display:flex;flex-direction:column;gap:24px;min-width:0}
   .grid2>*{min-width:0}
   td select{padding:6px 10px;width:auto}
@@ -221,6 +223,18 @@ const mmss = s => Math.floor(s/60) + ':' + String(s%60).padStart(2,'0');
 const has = (loc, f) => (loc.features || []).includes(f);
 const lockIcon = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg>';
 const lockNote = (what, plan) => `<div class="locked">${lockIcon}<span>${what} are included from the <b>${plan}</b> plan. <a href="mailto:hello@restoserve.ai?subject=Upgrade%20my%20plan">Upgrade</a></span></div>`;
+async function downloadCsv(loc, kind, btn){
+  btn.disabled = true; const t = btn.textContent; btn.textContent = 'Preparing…';
+  try {
+    const r = await fetch(`${API}/dash/export?loc=${encodeURIComponent(loc.key)}&range=${encodeURIComponent(state.range)}&kind=${kind}`, { headers: { 'Authorization': 'Bearer ' + session } });
+    if (!r.ok) throw 0;
+    const url = URL.createObjectURL(await r.blob()), a = document.createElement('a');
+    a.href = url; a.download = `${loc.key}-${kind}-${state.range}.csv`; document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 2000);
+  } catch(e) { alertBox('Could not download the file. Please try again.'); }
+  btn.disabled = false; btn.textContent = t;
+}
+const alertBox = m => { const d = document.createElement('div'); d.className = 'msg err'; d.style.cssText = 'position:fixed;bottom:16px;left:16px;right:16px;max-width:420px;margin:auto;z-index:9'; d.textContent = m; document.body.appendChild(d); setTimeout(() => d.remove(), 4000); };
 const phone = p => { const d = String(p||'').replace(/\D/g,'').slice(-10); return d.length===10 ? `(${d.slice(0,3)}) ${d.slice(3,6)}-${d.slice(6)}` : (p||'Unknown'); };
 
 async function api(path, opts={}){
@@ -325,20 +339,23 @@ function ownerView(){
       <div class="controls">
         ${me.locations.length > 1 ? `<select id="locSel" aria-label="Restaurant">${me.locations.map(l => `<option value="${esc(l.key)}" ${l.key===loc.key?'selected':''}>${esc(l.name)}</option>`).join('')}</select>` : ''}
         <div class="range" role="group" aria-label="Date range">${ranges.map(([k,t]) => `<button type="button" data-range="${k}" aria-pressed="${state.range===k}">${t}</button>`).join('')}</div>
+        <select id="monthSel" aria-label="Past month" class="msel"><option value="">Past months</option>${(me.months||[]).map(m => `<option value="${m.key}" ${state.range===m.key?'selected':''}>${m.label}</option>`).join('')}</select>
       </div>
     </div>
     <div class="tiles" id="tiles">${['Calls answered','Minutes used','Orders placed','Order sales'].map(k => `<div class="tile"><div class="k">${k}</div><div class="v"><span class="skel"></span></div></div>`).join('')}</div>
     <div class="usage" id="usage" hidden></div>
     <div class="grid2">
       <div class="stack">
-        <section class="panel"><div class="hd"><h2>Recent calls</h2><span class="hint">${has(loc,'recordings') ? 'Tap a call for the recording' : has(loc,'transcripts') ? 'Tap a call for the transcript' : ''}</span></div><div id="calls"><p class="loading">Loading calls…</p></div></section>
-        <section class="panel"><div class="hd"><h2>Phone orders</h2><span id="ordersCount"></span></div><div id="orders"><p class="loading">Loading orders…</p></div></section>
+        <section class="panel"><div class="hd"><h2>Recent calls</h2><span class="hdr"><button class="btn line small" data-csv="calls" type="button">Download CSV</button></span><span class="hint">${has(loc,'recordings') ? 'Tap a call for the recording' : has(loc,'transcripts') ? 'Tap a call for the transcript' : ''}</span></div><div id="calls"><p class="loading">Loading calls…</p></div></section>
+        <section class="panel"><div class="hd"><h2>Phone orders</h2><span class="hdr"><span id="ordersCount"></span> <button class="btn line small" data-csv="orders" type="button">Download CSV</button></span></div><div id="orders"><p class="loading">Loading orders…</p></div></section>
       </div>
       <section class="panel" id="deals"><div class="hd"><h2>Flash Deals</h2></div><p class="loading">Loading…</p></section>
     </div>`;
   const sel = v.querySelector('#locSel');
   if (sel) sel.addEventListener('change', () => { state.loc = sel.value; store.set('rs_loc', sel.value); ownerView(); });
   v.querySelectorAll('[data-range]').forEach(b => b.addEventListener('click', () => { state.range = b.dataset.range; store.set('rs_range', state.range); ownerView(); }));
+  v.querySelector('#monthSel').addEventListener('change', e => { if (e.target.value) { state.range = e.target.value; ownerView(); } });
+  v.querySelectorAll('[data-csv]').forEach(b => b.addEventListener('click', () => downloadCsv(loc, b.dataset.csv, b)));
   const q = `?loc=${encodeURIComponent(loc.key)}&range=${state.range}`;
   loadOverview(q); loadCalls(q, loc); loadOrders(q); loadDeals(loc);
 }
@@ -347,7 +364,7 @@ async function loadOverview(q){
   const tiles = document.getElementById('tiles'), usage = document.getElementById('usage');
   try {
     const o = await api('/dash/overview' + q);
-    const label = {today:'today','7d':'last 7 days',month:'this month'}[o.range];
+    const label = {today:'today','7d':'last 7 days',month:'this month'}[o.range] || o.month_label;
     tiles.innerHTML = [
       ['Calls answered', num(o.calls), o.calls == null ? 'Call history not connected yet' : label],
       ['Minutes used', num(o.minutes), o.minutes == null ? '' : label],
@@ -357,7 +374,7 @@ async function loadOverview(q){
     if (o.plan_minutes && o.month_minutes != null) {
       const pct = Math.min(100, Math.round(o.month_minutes / o.plan_minutes * 100));
       usage.hidden = false;
-      usage.innerHTML = `<div class="row"><span><b>${num(o.month_minutes)}</b> of ${num(o.plan_minutes)} plan minutes used this month</span><span>${pct >= 100 ? 'Extra minutes are $0.45 each' : num(o.plan_minutes - o.month_minutes) + ' left'}</span></div>
+      usage.innerHTML = `<div class="row"><span><b>${num(o.month_minutes)}</b> of ${num(o.plan_minutes)} plan minutes used ${o.past ? 'in ' + esc(o.month_label) : 'this month'}</span><span>${pct >= 100 ? 'Extra minutes are $0.45 each' : num(o.plan_minutes - o.month_minutes) + ' left'}</span></div>
         <div class="meter" role="progressbar" aria-valuenow="${pct}" aria-valuemin="0" aria-valuemax="100" aria-label="Plan minutes used"><i class="${pct>=100?'over':pct>=80?'warn':''}" style="width:${pct}%"></i></div>`;
     }
   } catch(e) { tiles.innerHTML = `<div class="tile" style="grid-column:1/-1"><div class="k">${esc(e.message)}</div></div>`; }
@@ -483,19 +500,24 @@ async function partnerView(){
 /* ---------- Admin overview ---------- */
 async function adminView(){
   const v = document.getElementById('view');
-  v.innerHTML = `<div class="bar"><div><h1>Business overview</h1><p class="sub">All restaurants, this month</p></div>
-    <button class="btn line small" id="refresh" type="button">Refresh</button></div>
+  state.amonth = state.amonth || 'month';
+  v.innerHTML = `<div class="bar"><div><h1>Business overview</h1><p class="sub" id="asub">All restaurants, this month</p></div>
+    <div class="controls"><select id="amonth" class="msel" aria-label="Month"><option value="month">This month</option></select><button class="btn line small" id="refresh" type="button">Refresh</button></div></div>
     <div class="tiles" id="atiles">${['Customers','Monthly revenue','Calls this month','Phone order sales'].map(k => `<div class="tile"><div class="k">${k}</div><div class="v"><span class="skel"></span></div></div>`).join('')}</div>
     <section class="panel" style="margin-bottom:24px"><div class="hd"><h2>Restaurants</h2><span class="hint">Click a restaurant to open it</span></div><div id="arows"><p class="loading">Loading…</p></div></section>
     <section class="panel"><div class="hd"><h2>Sales pipeline</h2><span id="owed"></span></div><div id="apipe"><p class="loading">Loading…</p></div></section>`;
   v.querySelector('#refresh').addEventListener('click', adminView);
   try {
-    const d = await api('/dash/admin'), t = d.totals;
+    const d = await api('/dash/admin?month=' + encodeURIComponent(state.amonth)), t = d.totals;
+    const ms = document.getElementById('amonth');
+    ms.innerHTML = '<option value="month">This month</option>' + d.months.map(m => `<option value="${m.key}" ${state.amonth===m.key?'selected':''}>${m.label}</option>`).join('');
+    ms.onchange = () => { state.amonth = ms.value; adminView(); };
+    document.getElementById('asub').textContent = 'All restaurants, ' + (t.past ? d.label : 'this month');
     const pl = (n, w) => `${num(n)} ${w}${n === 1 ? '' : 's'}`;
     document.getElementById('atiles').innerHTML = [
       ['Customers', num(t.companies), pl(t.locations, 'location')],
       ['Monthly revenue', money(t.mrr).replace('.00',''), `${pl(t.paying_locations, 'paying location')}${t.overage ? ' · +' + money(t.overage) + ' extra minutes' : ''}`],
-      ['Calls this month', num(t.calls), `${num(t.minutes)} minutes · ${num(t.today_calls)} today`],
+      [t.past ? 'Calls' : 'Calls this month', num(t.calls), `${num(t.minutes)} minutes` + (t.past ? '' : ` · ${num(t.today_calls)} today`)],
       ['Phone order sales', money(t.sales), num(t.orders) + ' orders']
     ].map(([k,val,dd]) => `<div class="tile"><div class="k">${k}</div><div class="v">${val}</div><div class="d">${esc(dd)}</div></div>`).join('');
     document.getElementById('arows').innerHTML = `<div class="scroll"><table><thead><tr><th>Restaurant</th><th>Plan</th><th>Minutes used</th><th class="num">Calls</th><th class="num">Today</th><th class="num">Orders</th><th class="num">Sales</th></tr></thead><tbody>` +
@@ -517,7 +539,7 @@ const SERVER = API;
 async function customersView(msg){
   const v = document.getElementById('view');
   v.innerHTML = `<div class="bar"><div><h1>Customers</h1><p class="sub">Add restaurants and logins here. Changes work right away, with no server restart.</p></div>
-    <button class="btn line small" id="syncAll" type="button">Import calls from Retell</button></div>
+    <div class="controls"><button class="btn line small" id="syncAll" type="button">Import calls from Retell</button><button class="btn line small" id="ordAll" type="button">Import orders from Square</button><button class="btn line small" id="report" type="button">Email last month's billing report</button></div></div>
     <div id="cmsg">${msg ? `<div class="msg ok" style="margin:0 0 16px">${esc(msg)}</div>` : ''}</div>
     <section class="panel" style="margin-bottom:24px"><div class="hd"><h2>Restaurants</h2><button class="btn small" id="addRest" type="button">Add restaurant</button></div><div id="restForm"></div><div id="restList"><p class="loading">Loading…</p></div></section>
     <section class="panel"><div class="hd"><h2>Logins</h2><button class="btn small" id="addAcc" type="button">Add login</button></div><div id="accForm"></div><div id="accList"><p class="loading">Loading…</p></div></section>`;
@@ -611,12 +633,27 @@ async function customersView(msg){
       const n = Object.values(r.imported).reduce((a,b) => a+b, 0);
       const errs = Object.entries(r.errors || {}).map(([k,m]) => `${esc(names[k] || k)}: ${esc(m)}`);
       const nc = (r.not_connected || []).map(k => esc(names[k] || k));
-      v.querySelector('#cmsg').innerHTML = `<div class="msg ${errs.length ? 'err' : 'ok'}" style="margin:0 0 16px">Imported ${num(n)} calls from the last 35 days.` +
+      v.querySelector('#cmsg').innerHTML = `<div class="msg ${errs.length ? 'err' : 'ok'}" style="margin:0 0 16px">Imported ${num(n)} calls from the last 90 days.` +
         (nc.length ? ` No Retell agent ID yet: ${nc.join(', ')}.` : '') + (errs.length ? `<br>Problem: ${errs.join('<br>')}` : '') + '</div>';
     } catch(e) { v.querySelector('#cmsg').innerHTML = `<div class="msg err" style="margin:0 0 16px">${esc(e.message)}</div>`; }
     btn.disabled = false; btn.textContent = t;
   };
   v.querySelector('#syncAll').addEventListener('click', e => sync(e.target));
+  v.querySelector('#ordAll').addEventListener('click', async e => {
+    const btn = e.target; btn.disabled = true; const t = btn.textContent; btn.textContent = 'Importing…';
+    try { const r = await api('/dash/admin/import-orders', { method:'POST', body: '{}' });
+      const n = Object.values(r.imported).reduce((a,b) => a+b, 0);
+      const errs = Object.entries(r.errors || {}).map(([k,m]) => `${esc(names[k] || k)}: ${esc(m)}`);
+      v.querySelector('#cmsg').innerHTML = `<div class="msg ${errs.length ? 'err' : 'ok'}" style="margin:0 0 16px">Imported ${num(n)} phone orders from the last 90 days.` + (errs.length ? `<br>Problem: ${errs.join('<br>')}` : '') + '</div>';
+    } catch(x) { v.querySelector('#cmsg').innerHTML = `<div class="msg err" style="margin:0 0 16px">${esc(x.message)}</div>`; }
+    btn.disabled = false; btn.textContent = t;
+  });
+  v.querySelector('#report').addEventListener('click', async e => {
+    const btn = e.target; btn.disabled = true;
+    try { const r = await api('/dash/admin/report', { method:'POST', body: '{}' }); v.querySelector('#cmsg').innerHTML = `<div class="msg ok" style="margin:0 0 16px">${esc(r.message)}</div>`; }
+    catch(x) { v.querySelector('#cmsg').innerHTML = `<div class="msg err" style="margin:0 0 16px">${esc(x.message)}</div>`; }
+    btn.disabled = false;
+  });
   v.querySelectorAll('[data-sync]').forEach(b => b.addEventListener('click', () => sync(b, b.dataset.sync)));
 }
 
