@@ -925,44 +925,44 @@
     </div>
 
     <div id="paneOwner" role="tabpanel" aria-labelledby="tabOwner">
-      <p>Enter the email on your RestoServe account. We’ll send you a secure link to your owner dashboard.</p>
+      <p>Log in with your password, or leave it empty and we’ll email you a secure link to your dashboard.</p>
       <ul class="login-perks">
         <li>Calls, orders and minutes this month</li>
         <li>Recordings and transcripts</li>
         <li>All your locations in one place</li>
       </ul>
       <div class="form-error" role="alert"></div>
-      <form data-form="Owner dashboard login request" novalidate>
-        <input class="hp" type="text" name="company_website" tabindex="-1" autocomplete="off" aria-hidden="true">
+      <form data-loginform="owner" novalidate>
         <label for="l_email">Email</label>
-        <input id="l_email" name="Email" type="email" autocomplete="email" required>
-        <label for="l_rest">Restaurant</label>
-        <input id="l_rest" name="Restaurant" type="text" placeholder="Restaurant name and city">
-        <button type="submit" class="btn">Email me my dashboard link</button>
+        <input id="l_email" name="Email" type="email" autocomplete="username" required>
+        <label for="l_pw">Password</label>
+        <input id="l_pw" type="password" autocomplete="current-password" placeholder="Leave empty to get an email link">
+        <button type="submit" class="btn">Log in</button>
+        <button type="button" class="btn outline" data-linkbtn style="margin-top:10px">Email me a login link</button>
       </form>
       <div class="sent"><b>Check your email</b>Your dashboard link is on its way. It can take a few minutes.</div>
-      <p class="form-note">Set a password? <a href="dashboard.html" style="color:var(--accent);font-weight:600">Log in with your password</a></p>
+      <p class="form-note">No password yet, or forgot it? Use the email link, then set a password from your dashboard.</p>
       <p class="form-note">Not a customer yet? <a href="#start" data-close style="color:var(--accent);font-weight:600">Start a free trial</a></p>
     </div>
 
     <div id="panePartner" role="tabpanel" aria-labelledby="tabPartner" hidden>
-      <p>Enter the email you signed up with. We’ll send you a secure link to your partner portal.</p>
+      <p>Log in with your password, or leave it empty and we’ll email you a secure link to your partner portal.</p>
       <ul class="login-perks">
         <li>The restaurants you introduced and where each one stands</li>
         <li>What you’ve earned and what’s been paid</li>
         <li>Add a new restaurant any time</li>
       </ul>
       <div class="form-error" role="alert"></div>
-      <form data-form="Partner portal login request" novalidate>
-        <input class="hp" type="text" name="company_website" tabindex="-1" autocomplete="off" aria-hidden="true">
+      <form data-loginform="partner" novalidate>
         <label for="pl_email">Email</label>
-        <input id="pl_email" name="Email" type="email" autocomplete="email" required>
-        <label for="pl_name">Your name</label>
-        <input id="pl_name" name="Name" type="text" autocomplete="name">
-        <button type="submit" class="btn">Email me my partner link</button>
+        <input id="pl_email" name="Email" type="email" autocomplete="username" required>
+        <label for="pl_pw">Password</label>
+        <input id="pl_pw" type="password" autocomplete="current-password" placeholder="Leave empty to get an email link">
+        <button type="submit" class="btn">Log in</button>
+        <button type="button" class="btn outline" data-linkbtn style="margin-top:10px">Email me a login link</button>
       </form>
       <div class="sent"><b>Check your email</b>Your partner portal link is on its way. It can take a few minutes.</div>
-      <p class="form-note">Set a password? <a href="dashboard.html#partner" style="color:var(--accent);font-weight:600">Log in with your password</a></p>
+      <p class="form-note">No password yet, or forgot it? Use the email link, then set a password from your portal.</p>
       <p class="form-note">Not a partner yet? <a href="#partners" data-close style="color:var(--accent);font-weight:600">Join the program</a></p>
     </div>
   </div>
@@ -1024,6 +1024,48 @@
         err.innerHTML = 'We couldn’t send this right now. Please email us at <a href="mailto:hello@restoserve.ai" style="text-decoration:underline">hello@restoserve.ai</a> or call (505) 588-7605.';
         err.style.display = 'block';
       } finally { btn.disabled = false; btn.textContent = label; }
+    });
+  });
+
+  // Log in: password goes straight to the dashboard; empty password = email a login link
+  const API = 'https://restoserve-server.onrender.com';
+  document.querySelectorAll('form[data-loginform]').forEach(form => {
+    const box = form.parentElement, err = box.querySelector('.form-error'), sent = box.querySelector('.sent');
+    const role = form.dataset.loginform, email = form.querySelector('input[type=email]'), pw = form.querySelector('input[type=password]');
+    const linkBtn = form.querySelector('[data-linkbtn]'), loginBtn = form.querySelector('button[type=submit]');
+    const showErr = m => { if (err) { err.textContent = m; err.style.display = 'block'; } else { alert(m); } };
+    const valid = () => { if (/^\S+@\S+\.\S+$/.test(email.value.trim())) return true; showErr('Please enter a valid email address.'); email.focus(); return false; };
+    async function sendLink(){
+      if (err) err.style.display = 'none';
+      if (!valid()) return;
+      linkBtn.disabled = true; const t = linkBtn.textContent; linkBtn.textContent = 'Sending…';
+      try {
+        const r = await fetch(FORM_URL, { method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ form_type: role === 'partner' ? 'Partner portal login request' : 'Owner dashboard login request', Email: email.value.trim() }) });
+        const j = await r.json().catch(() => ({}));
+        if (!r.ok || !j.ok) throw 0;
+        form.style.display = 'none'; sent.style.display = 'block';
+      } catch (x) { showErr('We couldn\u2019t send the link right now. Please try again, or email hello@restoserve.ai.'); }
+      finally { linkBtn.disabled = false; linkBtn.textContent = t; }
+    }
+    linkBtn.addEventListener('click', sendLink);
+    form.addEventListener('submit', async e => {
+      e.preventDefault();
+      if (err) err.style.display = 'none';
+      if (!pw.value) return sendLink();
+      if (!valid()) return;
+      loginBtn.disabled = true; loginBtn.textContent = 'Logging in…';
+      try {
+        const r = await fetch(API + '/auth/password-login', { method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ email: email.value.trim(), password: pw.value }) });
+        const j = await r.json().catch(() => ({}));
+        if (!r.ok) throw new Error(j.detail || 'Could not log in.');
+        try { localStorage.setItem('rs_session', j.session); } catch (x) {}
+        window.location.href = 'dashboard.html';
+      } catch (x) {
+        showErr(x.message === 'Failed to fetch' ? 'Can\u2019t reach the server right now. Try again in a minute.' : x.message);
+        pw.select(); loginBtn.disabled = false; loginBtn.textContent = 'Log in';
+      }
     });
   });
 
