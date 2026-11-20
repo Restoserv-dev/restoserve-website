@@ -769,6 +769,7 @@ async function customersView(msg){
         <div><label for="rf_tz">Time zone</label><select id="rf_tz">${TZS.map(([k,t]) => `<option value="${k}" ${k===(r.tz||'America/Denver')?'selected':''}>${t}</option>`).join('')}</select></div>
         <div><label for="rf_min">Custom minutes (optional)</label><input type="number" id="rf_min" min="0" value="${esc(r.minutes||'')}" placeholder="Plan default"></div>
         <div class="wide"><label for="rf_em">Order and alert emails</label><input type="text" id="rf_em" value="${esc(r.alert_emails||'')}" placeholder="owner@gmail.com, manager@gmail.com"><small>Phone orders, catering, complaints and payment alerts for this restaurant go here (up to 5, separated by commas). Leave empty and they come to you.</small></div>
+        <div class="wide"><label for="rf_mgr">Manager mobile for urgent texts</label><input type="tel" id="rf_mgr" value="${esc((r.manager_phones||'').replace(/\+1(\d{3})(\d{3})(\d{4})/g,'($1) $2-$3'))}" placeholder="(505) 555-0101"><small>When the bot can't reach the manager by phone, or an order can't go into Square, it also texts this number (up to 3, separated by commas).</small></div>
         <div class="wide"><div class="checks"><label><input type="checkbox" id="rf_copy" ${r.copy_admin!==false?'checked':''}> Send me a hidden copy</label><label><input type="checkbox" id="rf_deals" ${r.flash_deals?'checked':''}> Flash Deals add-on ($49/mo)</label><label><input type="checkbox" id="rf_mkt" ${r.marketing?'checked':''}> Social posts add-on</label><label><input type="checkbox" id="rf_int" ${r.internal?'checked':''}> Test restaurant (don't count as revenue)</label></div></div>
       </div><div class="ferr"></div>
       <div class="facts"><button class="btn small" type="submit">Save restaurant</button><button class="btn line small" type="button" data-cancel>Cancel</button></div></form>`);
@@ -780,7 +781,7 @@ async function customersView(msg){
         await api('/dash/admin/restaurant', { method:'POST', body: JSON.stringify({ key: box.querySelector('#rf_key').value.trim(), name: box.querySelector('#rf_name').value,
           plan: box.querySelector('#rf_plan').value, agent_id: box.querySelector('#rf_agent').value, square_location_id: box.querySelector('#rf_sq').value,
           tz: box.querySelector('#rf_tz').value, minutes: box.querySelector('#rf_min').value, flash_deals: box.querySelector('#rf_deals').checked, marketing: box.querySelector('#rf_mkt').checked, internal: box.querySelector('#rf_int').checked,
-          alert_emails: box.querySelector('#rf_em').value, copy_admin: box.querySelector('#rf_copy').checked }) });
+          alert_emails: box.querySelector('#rf_em').value, manager_phones: box.querySelector('#rf_mgr').value, copy_admin: box.querySelector('#rf_copy').checked }) });
         me = await api('/dash/me'); customersView('Restaurant saved.');
       } catch(x) { b.disabled = false; err(box, x.message); }
     });
