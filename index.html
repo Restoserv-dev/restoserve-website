@@ -1084,5 +1084,20 @@
     counters.forEach(el => io.observe(el));
   }
 </script>
+<script>
+/* Partner links: restoserve.ai/?ref=CODE fills "Referred by" on the free-trial form for 90 days */
+(function(){
+  try {
+    var ok = function(v){ return v && /^[A-Za-z0-9 _.-]{1,40}$/.test(v); };
+    var p = new URLSearchParams(location.search).get('ref');
+    if (ok(p)) localStorage.setItem('rs_ref', JSON.stringify({ c: p, t: Date.now() }));
+    var r = JSON.parse(localStorage.getItem('rs_ref') || 'null');
+    if (r && ok(r.c) && Date.now() - r.t < 90 * 864e5) {
+      var f = document.getElementById('s_ref');
+      if (f && !f.value) f.value = r.c;
+    }
+  } catch (e) {}
+})();
+</script>
 </body>
 </html>

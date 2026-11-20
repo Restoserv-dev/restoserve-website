@@ -82,6 +82,8 @@
   .meter i.warn{background:#D97706}.meter i.over{background:var(--red)}
   .grid2{display:grid;grid-template-columns:minmax(0,1.5fr) minmax(0,1fr);gap:24px;align-items:start}
   .panel{background:#fff;border:1px solid var(--line);border-radius:var(--r);overflow:hidden}
+  .reflink{display:flex;gap:24px;padding:20px;align-items:flex-start}.refqr{flex:none;width:220px;min-height:220px}.refqr img,.refqr canvas{display:block;width:220px;height:220px}.reftext{flex:1;min-width:0}.reftext p{margin:0 0 10px}
+  @media (max-width:640px){.reflink{flex-direction:column;align-items:center}.reftext{width:100%}}
   .panel>.hd{display:flex;justify-content:space-between;align-items:center;gap:10px;padding:18px 22px;border-bottom:1px solid var(--line)}
   .panel>.hd h2{font-size:1.1rem}
   .panel>.hd span{font-size:.9rem}
@@ -403,7 +405,8 @@ function ownerView(){
         <section class="panel"><div class="hd"><h2>Recent calls</h2><span class="hdr"><button class="btn line small" data-csv="calls" type="button">Download CSV</button></span><span class="hint">${has(loc,'recordings') ? 'Tap a call for the recording' : has(loc,'transcripts') ? 'Tap a call for the transcript' : ''}</span></div><div id="calls"><p class="loading">Loading calls…</p></div></section>
         <section class="panel"><div class="hd"><h2>Phone orders</h2><span class="hdr"><span id="ordersCount"></span> <button class="btn line small" data-csv="orders" type="button">Download CSV</button></span></div><div id="orders"><p class="loading">Loading orders…</p></div></section>
       </div>
-      <section class="panel" id="deals"><div class="hd"><h2>Flash Deals</h2></div><p class="loading">Loading…</p></section>
+      <div class="stack"><section class="panel" id="deals"><div class="hd"><h2>Flash Deals</h2></div><p class="loading">Loading…</p></section>
+      <section class="panel" id="social"><div class="hd"><h2>Social posts</h2></div><p class="loading">Loading…</p></section></div>
     </div>`;
   const sel = v.querySelector('#locSel');
   if (sel) sel.addEventListener('change', () => { state.loc = sel.value; store.set('rs_loc', sel.value); ownerView(); });
@@ -411,7 +414,7 @@ function ownerView(){
   v.querySelector('#monthSel').addEventListener('change', e => { if (e.target.value) { state.range = e.target.value; ownerView(); } });
   v.querySelectorAll('[data-csv]').forEach(b => b.addEventListener('click', () => downloadCsv(loc, b.dataset.csv, b)));
   const q = `?loc=${encodeURIComponent(loc.key)}&range=${state.range}`;
-  loadOverview(q); loadCalls(q, loc); loadOrders(q); loadDeals(loc);
+  loadOverview(q); loadCalls(q, loc); loadOrders(q); loadDeals(loc); loadSocial(loc);
 }
 
 async function loadOverview(q){
@@ -525,15 +528,25 @@ async function loadDeals(loc){
 async function partnerView(){
   const v = document.getElementById('view');
   v.innerHTML = `<div class="bar"><div><h1>${me.admin ? 'Leads and partners' : 'Partner portal'}</h1>
-    <p class="sub">${me.admin ? 'Every free-trial request from the website. Set the status as each one moves along.' : 'Restaurants you introduced and where each one stands. You earn $500 when one becomes a paying customer.'}</p></div>
+    <p class="sub">${me.admin ? 'Every free-trial request from the website. Set the status as each one moves along.' : (me.partner_rate ? `Restaurants you introduced and where each one stands. You earn ${Math.round(me.partner_rate*100)}% of each paying restaurant’s monthly plan, every month it stays.` : `Restaurants you introduced and where each one stands. You earn $${me.partner_payout || 500} when one becomes a paying customer.`)}</p></div>
     ${me.admin ? '<a class="btn line small" href="https://restoserve.ai/#start" target="_blank" rel="noopener">Free trial form</a>' : '<button class="btn small" id="addLead" type="button">Add a restaurant</button>'}</div>
-    <div class="tiles" id="ptiles">${['Restaurants','Paying','Earned','Waiting to be paid'].map(k => `<div class="tile"><div class="k">${k}</div><div class="v"><span class="skel"></span></div></div>`).join('')}</div>
-    <section class="panel"><div class="hd"><h2>Restaurants</h2><span>${me.admin ? '' : 'Put your name in "Referred by" when they sign up'}</span></div><div id="leads"><p class="loading">Loading…</p></div></section>`;
+    <div class="tiles" id="ptiles">${['Restaurants','Paying','Earned','Waiting'].map(k => `<div class="tile"><div class="k">${k}</div><div class="v"><span class="skel"></span></div></div>`).join('')}</div>
+    ${!me.admin && me.ref_link ? `<section class="panel" style="margin-bottom:16px"><div class="hd"><h2>Your link and QR code</h2><span>Code: ${esc(me.partner_code)}</span></div>
+      <div class="reflink"><div class="refqr" id="refqr" role="img" aria-label="QR code for your sign-up link"></div>
+      <div class="reftext"><p>Share this link or QR code. Restaurants that sign up through it are credited to you, even if they come back later.</p>
+      <input class="tin" id="refurl" type="text" readonly value="${esc(me.ref_link)}" aria-label="Your sign-up link">
+      <div class="facts" style="margin-top:10px"><button class="btn small" id="refcopy" type="button">Copy link</button><a class="btn line small" id="refdl" download="RestoServe-QR-${esc(me.partner_code)}.png" href="#" hidden>Download QR code</a></div>
+      <p class="note">Meeting an owner in person? Add the restaurant first with “Add a restaurant”. It stays yours for 90 days, even if they sign up on their own.</p></div></div></section>` : ''}
+    <section class="panel"><div class="hd"><h2>Restaurants</h2><span>${me.admin ? '' : 'Owners can also type your code in “Referred by”'}</span></div><div id="leads"><p class="loading">Loading…</p></div></section>`;
   const al = document.getElementById('addLead'); if (al) al.addEventListener('click', leadForm);
+  if (!me.admin && me.ref_link) refTools();
   try {
     const d = await api('/dash/leads');
     const paying = d.leads.filter(l => l.status === 'Paying' || l.status === 'Paid out').length;
-    document.getElementById('ptiles').innerHTML = [['Restaurants', num(d.leads.length)], ['Paying', num(paying)], ['Earned', money(d.earned).replace('.00','')], ['Waiting to be paid', money(d.owed).replace('.00','')]]
+    const pt = d.admin ? [['Restaurants', num(d.leads.length)], ['Paying', num(paying)], ['Partners earn / month', money(d.monthly)], ['One-time rewards owed', money(d.owed).replace('.00','')]]
+      : d.rate ? [['Restaurants', num(d.leads.length)], ['Paying', num(paying)], ['You earn / month', money(d.monthly)], ['You earn / year', money(d.yearly)]]
+      : [['Restaurants', num(d.leads.length)], ['Paying', num(paying)], ['Earned', money(d.earned).replace('.00','')], ['Waiting to be paid', money(d.owed).replace('.00','')]];
+    document.getElementById('ptiles').innerHTML = pt
       .map(([k,val]) => `<div class="tile"><div class="k">${k}</div><div class="v">${val}</div></div>`).join('');
     const box = document.getElementById('leads');
     if (!d.leads.length) { box.innerHTML = `<p class="empty">${d.admin ? 'No trial requests yet.' : 'No restaurants yet. When an owner signs up with your name in "Referred by", they’ll show up here.'}</p>`; return; }
@@ -552,6 +565,89 @@ async function partnerView(){
   } catch(e) { document.getElementById('leads').innerHTML = `<p class="empty">${esc(e.message)}</p>`; }
 }
 
+
+
+/* ---------- Social posts ---------- */
+function toJpeg(file){
+  return new Promise((resolve, reject) => {
+    const img = new Image(), url = URL.createObjectURL(file);
+    img.onload = () => { const max = 1440, k = Math.min(1, max / Math.max(img.width, img.height));
+      const c = document.createElement('canvas'); c.width = Math.round(img.width * k); c.height = Math.round(img.height * k);
+      c.getContext('2d').drawImage(img, 0, 0, c.width, c.height); URL.revokeObjectURL(url); resolve(c.toDataURL('image/jpeg', 0.88)); };
+    img.onerror = () => reject(new Error('That file isn’t a photo we can read. Try a JPG or PNG.'));
+    img.src = url;
+  });
+}
+async function loadSocial(loc){
+  const box = document.getElementById('social'); if (!box) return;
+  try {
+    const d = await api('/dash/social?loc=' + encodeURIComponent(loc.key));
+    const hd = '<div class="hd"><h2>Social posts</h2>' + (d.page ? `<span>${esc(d.page.name)}${d.page.ig ? ' · @' + esc(d.page.ig) : ''}</span>` : '') + '</div>';
+    if (d.locked) { box.innerHTML = hd + `<div class="upsell"><h3>Post a dish in seconds</h3><p>Snap a photo, add a few words, and we write the post and share it on Facebook and Instagram.</p>
+      <p style="font-size:.92rem;margin:14px 0">Included in <b>Pro</b>, or as an add-on.</p><a class="btn" href="mailto:hello@restoserve.ai?subject=${encodeURIComponent('Add social posts - ' + loc.name)}">Ask about it</a></div>`; return; }
+    if (!d.ready) { box.innerHTML = hd + '<p class="empty">Facebook and Instagram posting is being switched on. Check back soon.</p>'; return; }
+    if (!d.pages.length) { box.innerHTML = hd + `<div class="deal"><p>Connect your restaurant's Facebook Page (and the Instagram business account linked to it). You'll log in to Facebook and pick your Page.</p>
+      <a class="btn" href="${esc(d.link)}" target="_blank" rel="noopener" style="margin-top:12px">Connect Facebook & Instagram</a><p class="note">Refresh this page after you connect.</p></div>`; return; }
+    if (!d.page) { box.innerHTML = hd + `<div class="deal"><label for="pgSel">Which Page should we post to?</label><select id="pgSel">${d.pages.map(p => `<option value="${esc(p.id)}">${esc(p.name)}${p.ig ? ' (Instagram @' + esc(p.ig) + ')' : ''}</option>`).join('')}</select>
+      <button class="btn" id="pgSave" type="button" style="margin-top:12px">Use this Page</button></div>`;
+      box.querySelector('#pgSave').addEventListener('click', async () => { await api('/dash/social/page?loc=' + encodeURIComponent(loc.key), { method:'POST', body: JSON.stringify({ page_id: box.querySelector('#pgSel').value }) }); loadSocial(loc); }); return; }
+    box.innerHTML = hd + `<div class="deal" id="soc">
+      <label for="socPhoto">Dish photo</label><input id="socPhoto" type="file" accept="image/*" class="tin">
+      <img id="socPrev" alt="" hidden style="width:100%;border-radius:10px;margin-top:10px">
+      <label for="socNote">A few words about it</label><textarea id="socNote" maxlength="400" placeholder="e.g. new goat fry biryani, weekends only"></textarea>
+      <div id="socAct" style="margin-top:14px"><button class="btn" id="socDraft" type="button">${d.ai ? 'Write my post' : 'Next'}</button></div><div id="socMsg"></div>
+      <p class="note">You'll see the posts before anything goes out.${d.page.ig ? '' : ' No Instagram business account is linked to this Page, so it posts to Facebook only.'}</p></div>
+      <ul class="list recent">${d.posts.length ? d.posts.map(p => `<li>${esc((p.caption || '').slice(0, 90))}${(p.caption || '').length > 90 ? '…' : ''}<small>${dt(when(p.at))} · ${esc(p.status)}${p.error ? ' · ' + esc(p.error) : ''}</small></li>`).join('') : '<li><small>No posts yet.</small></li>'}</ul>`;
+    let jpeg = '';
+    const q = id => box.querySelector(id), msg = q('#socMsg');
+    q('#socPhoto').addEventListener('change', async e => { msg.innerHTML = ''; const f = e.target.files[0]; if (!f) return;
+      try { jpeg = await toJpeg(f); q('#socPrev').src = jpeg; q('#socPrev').hidden = false; } catch(x) { msg.innerHTML = `<div class="msg err">${esc(x.message)}</div>`; } });
+    q('#socDraft').addEventListener('click', async e => {
+      msg.innerHTML = '';
+      if (!jpeg) { msg.innerHTML = '<div class="msg err">Add a photo first.</div>'; return; }
+      e.target.disabled = true; e.target.textContent = d.ai ? 'Writing…' : 'Saving…';
+      try {
+        const r = await api('/dash/social/draft?loc=' + encodeURIComponent(loc.key), { method:'POST', body: JSON.stringify({ image: jpeg, note: q('#socNote').value }) });
+        q('#socAct').innerHTML = `<label for="capFb">Facebook post</label><textarea id="capFb" rows="4">${esc(r.facebook)}</textarea>
+          ${d.page.ig ? `<label for="capIg">Instagram post</label><textarea id="capIg" rows="5">${esc(r.instagram)}</textarea>` : ''}
+          <div class="checks" style="margin-top:10px"><label><input type="checkbox" id="toFb" checked> Facebook</label>${d.page.ig ? '<label><input type="checkbox" id="toIg" checked> Instagram</label>' : ''}</div>
+          <div class="acts" style="display:flex;gap:8px;margin-top:12px;flex-wrap:wrap"><button class="btn small" id="socPost" type="button">Post now</button><button class="btn line small" id="socCancel" type="button">Start over</button></div>`;
+        q('#socCancel').addEventListener('click', () => loadSocial(loc));
+        q('#socPost').addEventListener('click', async ev => {
+          ev.target.disabled = true; ev.target.textContent = 'Posting…';
+          try {
+            const p = await api('/dash/social/publish?loc=' + encodeURIComponent(loc.key), { method:'POST', body: JSON.stringify({ id: r.id,
+              facebook: q('#capFb').value, instagram: q('#capIg') ? q('#capIg').value : '', to_facebook: q('#toFb').checked, to_instagram: q('#toIg') ? q('#toIg').checked : false }) });
+            loadSocial(loc); setTimeout(() => { const m = document.getElementById('socMsg'); if (m) m.innerHTML = `<div class="msg ${p.ok ? 'ok' : 'err'}">${esc(p.message)}</div>`; }, 500);
+          } catch(x) { ev.target.disabled = false; ev.target.textContent = 'Post now'; msg.innerHTML = `<div class="msg err">${esc(x.message)}</div>`; }
+        });
+      } catch(x) { e.target.disabled = false; e.target.textContent = d.ai ? 'Write my post' : 'Next'; msg.innerHTML = `<div class="msg err">${esc(x.message)}</div>`; }
+    });
+  } catch(e) { box.innerHTML = `<div class="hd"><h2>Social posts</h2></div><p class="empty">${esc(e.message)}</p>`; }
+}
+
+/* ---------- Partner: personal link and QR code ---------- */
+function refTools(){
+  const url = document.getElementById('refurl'), btn = document.getElementById('refcopy');
+  btn.addEventListener('click', async () => {
+    try { await navigator.clipboard.writeText(url.value); btn.textContent = 'Copied'; }
+    catch(e) { url.select(); btn.textContent = 'Press Ctrl+C to copy'; }
+    setTimeout(() => { btn.textContent = 'Copy link'; }, 2500);
+  });
+  const draw = () => {
+    const box = document.getElementById('refqr'); if (!box) return;
+    box.innerHTML = '';
+    new QRCode(box, { text: url.value, width: 220, height: 220, colorDark: '#1E2A38', colorLight: '#FFFFFF', correctLevel: QRCode.CorrectLevel.M });
+    const c = box.querySelector('canvas'), dl = document.getElementById('refdl');
+    if (c && dl) { dl.href = c.toDataURL('image/png'); dl.hidden = false; }
+  };
+  if (window.QRCode) return draw();
+  const sc = document.createElement('script');
+  sc.src = 'https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js';
+  sc.onload = draw;
+  sc.onerror = () => { const b = document.getElementById('refqr'); if (b) b.innerHTML = '<p class="note">The QR code couldn’t load. Refresh the page to try again.</p>'; };
+  document.head.appendChild(sc);
+}
 
 /* ---------- Partner: add a restaurant ---------- */
 function leadForm(){
@@ -620,7 +716,7 @@ async function adminView(){
     document.querySelectorAll('tr[data-loc]').forEach(tr => { const go = () => { state.loc = tr.dataset.loc; store.set('rs_loc', state.loc); state.view = 'owner'; render(); };
       tr.addEventListener('click', go); tr.addEventListener('keydown', e => { if (e.key === 'Enter') go(); }); });
     document.getElementById('apipe').innerHTML = '<div class="pipe">' + Object.entries(d.pipeline).map(([k,n]) => `<div><b>${num(n)}</b>${esc(k)}</div>`).join('') + '</div>';
-    document.getElementById('owed').textContent = d.owed ? money(d.owed).replace('.00','') + ' owed to partners' : '';
+    document.getElementById('owed').textContent = [d.partner_monthly ? money(d.partner_monthly) + ' a month to partners' : '', d.owed ? money(d.owed).replace('.00','') + ' one-time owed to partners' : ''].filter(Boolean).join(' · ');
   } catch(e) { document.getElementById('arows').innerHTML = `<p class="empty">${esc(e.message)}</p>`; }
 }
 
@@ -653,7 +749,7 @@ async function customersView(msg){
     d.admins.map(e => `<tr><td>${esc(e)}</td><td><span class="pill g">Admin</span></td><td><small>Set in Render (ADMIN_EMAILS)</small></td><td><small>All</small></td><td></td></tr>`).join('') +
     d.accounts.map((a,i) => `<tr><td>${esc(a.email)}<br><small>${esc(a.name)}</small></td>
       <td><span class="pill ${a.active ? (a.role==='partner'?'a':'g') : 'r'}">${a.active ? ({owner:'Owner',partner:'Partner',admin:'Admin'})[a.role] : 'Turned off'}</span></td>
-      <td>${esc(a.role === 'partner' ? (a.code ? 'Code: ' + a.code : '') : a.company)}</td>
+      <td>${esc(a.role === 'partner' ? [a.code ? 'Code: ' + a.code : '', a.rate ? Math.round(a.rate*100) + '% monthly' : '$500 one-time'].filter(Boolean).join(' · ') : a.company)}</td>
       <td>${a.role === 'owner' ? a.locations.map(l => esc(names[l] || l)).join(', ') : '<small>–</small>'}</td>
       <td><div class="rowacts"><button class="btn line small" data-edit-acc="${i}" type="button">Edit</button></div></td></tr>`).join('') +
     '</tbody></table></div>' : '<p class="empty">No logins yet.</p>';
@@ -673,7 +769,7 @@ async function customersView(msg){
         <div><label for="rf_tz">Time zone</label><select id="rf_tz">${TZS.map(([k,t]) => `<option value="${k}" ${k===(r.tz||'America/Denver')?'selected':''}>${t}</option>`).join('')}</select></div>
         <div><label for="rf_min">Custom minutes (optional)</label><input type="number" id="rf_min" min="0" value="${esc(r.minutes||'')}" placeholder="Plan default"></div>
         <div class="wide"><label for="rf_em">Order and alert emails</label><input type="text" id="rf_em" value="${esc(r.alert_emails||'')}" placeholder="owner@gmail.com, manager@gmail.com"><small>Phone orders, catering, complaints and payment alerts for this restaurant go here (up to 5, separated by commas). Leave empty and they come to you.</small></div>
-        <div class="wide"><div class="checks"><label><input type="checkbox" id="rf_copy" ${r.copy_admin!==false?'checked':''}> Send me a hidden copy</label><label><input type="checkbox" id="rf_deals" ${r.flash_deals?'checked':''}> Flash Deals add-on ($49/mo)</label><label><input type="checkbox" id="rf_int" ${r.internal?'checked':''}> Test restaurant (don't count as revenue)</label></div></div>
+        <div class="wide"><div class="checks"><label><input type="checkbox" id="rf_copy" ${r.copy_admin!==false?'checked':''}> Send me a hidden copy</label><label><input type="checkbox" id="rf_deals" ${r.flash_deals?'checked':''}> Flash Deals add-on ($49/mo)</label><label><input type="checkbox" id="rf_mkt" ${r.marketing?'checked':''}> Social posts add-on</label><label><input type="checkbox" id="rf_int" ${r.internal?'checked':''}> Test restaurant (don't count as revenue)</label></div></div>
       </div><div class="ferr"></div>
       <div class="facts"><button class="btn small" type="submit">Save restaurant</button><button class="btn line small" type="button" data-cancel>Cancel</button></div></form>`);
     if (isNew) { const n = box.querySelector('#rf_name'), k = box.querySelector('#rf_key'); n.addEventListener('input', () => { if (!k.dataset.touched) k.value = n.value.toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/^-|-$/g,'').slice(0,40); }); k.addEventListener('input', () => k.dataset.touched = 1); }
@@ -683,7 +779,7 @@ async function customersView(msg){
       try {
         await api('/dash/admin/restaurant', { method:'POST', body: JSON.stringify({ key: box.querySelector('#rf_key').value.trim(), name: box.querySelector('#rf_name').value,
           plan: box.querySelector('#rf_plan').value, agent_id: box.querySelector('#rf_agent').value, square_location_id: box.querySelector('#rf_sq').value,
-          tz: box.querySelector('#rf_tz').value, minutes: box.querySelector('#rf_min').value, flash_deals: box.querySelector('#rf_deals').checked, internal: box.querySelector('#rf_int').checked,
+          tz: box.querySelector('#rf_tz').value, minutes: box.querySelector('#rf_min').value, flash_deals: box.querySelector('#rf_deals').checked, marketing: box.querySelector('#rf_mkt').checked, internal: box.querySelector('#rf_int').checked,
           alert_emails: box.querySelector('#rf_em').value, copy_admin: box.querySelector('#rf_copy').checked }) });
         me = await api('/dash/me'); customersView('Restaurant saved.');
       } catch(x) { b.disabled = false; err(box, x.message); }
@@ -698,7 +794,8 @@ async function customersView(msg){
         <div><label for="af_role">Type</label><select id="af_role"><option value="owner" ${a.role==='owner'?'selected':''}>Restaurant owner</option><option value="partner" ${a.role==='partner'?'selected':''}>Sales partner</option><option value="admin" ${a.role==='admin'?'selected':''}>Admin (sees everything)</option></select></div>
         <div><label for="af_name">Person's name</label><input type="text" id="af_name" value="${esc(a.name||'')}"></div>
         <div data-for="owner"><label for="af_co">Company</label><input type="text" id="af_co" value="${esc(a.company||'')}" placeholder="Khansons LLC"><small>Locations with the same company count as one customer.</small></div>
-        <div data-for="partner"><label for="af_code">Referral code</label><input type="text" id="af_code" value="${esc(a.code||'')}" placeholder="Sara"><small>What owners type in "Referred by".</small></div>
+        <div data-for="partner"><label for="af_code">Referral code</label><input type="text" id="af_code" value="${esc(a.code||'')}" placeholder="Sara"><small>What owners type in "Referred by". Also used in their link.</small></div>
+        <div data-for="partner"><label for="af_rate">Commission</label><select id="af_rate"><option value="0" ${!a.rate?'selected':''}>$500 one-time per paying restaurant</option><option value="0.15" ${a.rate==0.15?'selected':''}>15% of the monthly plan, every month</option>${a.rate && a.rate!=0.15 ? `<option value="${a.rate}" selected>${Math.round(a.rate*100)}% of the monthly plan, every month</option>` : ''}</select></div>
         <div class="wide" data-for="owner"><label>Restaurants they can see</label><div class="checks">${d.restaurants.map(r => `<label><input type="checkbox" value="${esc(r.key)}" class="af_loc" ${a.locations.includes(r.key)?'checked':''}> ${esc(r.name)}</label>`).join('')}</div></div>
         <div class="wide"><div class="checks"><label><input type="checkbox" id="af_active" ${a.active?'checked':''}> Login is on</label></div></div>
       </div><div class="ferr"></div>
@@ -711,7 +808,7 @@ async function customersView(msg){
       e.preventDefault(); const b = e.target.querySelector('[type=submit]'); b.disabled = true;
       try {
         await api('/dash/admin/account', { method:'POST', body: JSON.stringify({ email: box.querySelector('#af_email').value, role: role.value,
-          name: box.querySelector('#af_name').value, company: box.querySelector('#af_co').value, code: box.querySelector('#af_code').value,
+          name: box.querySelector('#af_name').value, company: box.querySelector('#af_co').value, code: box.querySelector('#af_code').value, rate: +box.querySelector('#af_rate').value,
           locations: [...box.querySelectorAll('.af_loc:checked')].map(c => c.value), active: box.querySelector('#af_active').checked }) });
         customersView(isNew ? 'Login saved. They can now log in on restoserve.ai with this email.' : 'Login saved.');
       } catch(x) { b.disabled = false; err(box, x.message); }
